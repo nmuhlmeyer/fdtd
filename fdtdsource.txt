@@ -1,0 +1,26 @@
+function source = fdtdsource(ss,freq,omega,dt,nmax,etaz)
+%fdtdsource(ss,freq,omega,dt,nmax,etaz)
+% source = function source
+% ss = true for sinusoidal
+
+if ss == false
+%rtau=160.0e-12; 
+rtau = 1/(5e9*pi);
+tau=rtau/dt; 
+delay=3*tau; 
+mag = 1.148;
+end
+ 
+source=zeros(1,nmax); 
+%for n=1:7.0*tau 
+%  source(n)=sin(omega*(n-delay)*dt)*exp(-((n-delay)^2/tau^2)); 
+%  source(n)=mag*sin(omega*(n-delay)*dt)*exp(-((n-delay)^2/tau^2));
+%end
+if ss == true
+    source = cos(2*pi*freq*(1:nmax)*dt); % steady state
+else
+   for n=1:7.0*tau
+       %  source(n)=sin(omega*(n-delay)*dt)*exp(-((n-delay)^2/tau^2)); 
+        source(n)=etaz*mag*sin(omega*(n-delay)*dt)*exp(-((n-delay)^2/tau^2));
+    end
+end

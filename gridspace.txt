@@ -1,0 +1,231 @@
+function [caex cbex caey cbey dahz dbhz aicenter ajcenter b xa2num is js iread jread iread2 jread2] = ...
+    gridspace(twoantenna,ca,cb,da,db,ib,jb,lambda,ie,je,dx,backwall)
+% [caex cbex caey cbey dahz dbhz aicenter ajcenter B] = ...
+%   gridspace(twoantenna,ca,cb,da,db)
+
+%     Initialize entire main grid to free space 
+ 
+caex(1:ie,1:jb)=ca(1);      
+cbex(1:ie,1:jb)=cb(1); 
+ 
+caey(1:ib,1:je)=ca(1); 
+cbey(1:ib,1:je)=cb(1); 
+ 
+dahz(1:ie,1:je)=da(1); 
+dbhz(1:ie,1:je)=db(1); 
+ 
+%    Add transmitting E-Plane Horn Antenna
+
+% Initialization
+aicenter = 13;
+ajcenter = je/2;
+b = 10.16e-3;
+r2 = 8*lambda;
+B = sqrt(2*lambda*r2);
+
+le = sqrt(r2^2+(B/2)^2);
+alpha = atan(B/(2*r2));
+re = (B-b)*sqrt((le/B)^2-.25);
+%plength = r2 - re;
+plength = 1.75*lambda;
+%xa1 = aicenter + plength; % inital antena height location
+%xa2 = xa1 + re; % end antenna height location
+%ya1 = b/2; % initial antenna height location
+%ya2 = B/2; % end antenna height location
+m = atan(alpha);
+
+% Conversion of parameters from meters to cells
+%r2num = round(r2/dx);
+%renum = round(re/dx);
+plengthnum = round(plength/dx);
+xa1num = aicenter + round(plength/dx);
+xa2num = aicenter + round((plength + re)/dx);
+ya1num = ajcenter + ceil(b/2/dx);
+ya2num = ajcenter + round(B/2/dx);
+xanum = round(xa1num:xa2num);
+yanum = ya1num:m:ya2num;
+yanum = round(yanum); % y cell locations
+yanum = yanum(1:length(xanum));
+dist2 = yanum - ajcenter-1; % distance from center
+is = aicenter + round(lambda/(4*dx)); % new source location
+js = (ajcenter - floor(b/(2*dx))+1):(ajcenter + floor(b/(2*dx)));
+
+if backwall == 1
+% Add left edge
+i = aicenter;
+for j = ajcenter-floor(b/(2*dx)):...
+        ajcenter+ceil(b/(2*dx))-1
+    caey(i,j) = ca(2);
+    cbey(i,j) = cb(2);
+end
+end
+
+% Add parallel plate
+for i = aicenter:aicenter + plengthnum
+    j = ajcenter+ceil(b/(2*dx));
+    caex(i,j) = ca(2);
+    cbex(i,j) = cb(2);
+    j = ajcenter-floor(b/(2*dx));
+    caex(i,j) = ca(2);
+    cbex(i,j) = cb(2);
+end
+if backwall == 0
+    for i = 1:aicenter
+        j = ajcenter+ceil(b/(2*dx));
+        caex(i,j) = ca(2);
+        cbex(i,j) = cb(2);
+        j = ajcenter-floor(b/(2*dx));
+        caex(i,j) = ca(2);
+        cbex(i,j) = cb(2);
+    end
+end
+
+% Add top flare
+for i = xa1num:xa2num
+    x = i - xa1num + 1; % x goes from 1 to length of flare
+for j = 1:length(yanum(1:length(xanum)))
+    if x == j % check for Ex component
+        caex(xanum(x),yanum(j)) = ca(2);
+        cbex(xanum(x),yanum(j)) = cb(2);
+        if j ~= length(yanum) % check for end of antenna
+            if yanum(j+1) > yanum(j) % check for Ey component
+                caey(xanum(x+1),yanum(j)) = ca(2);
+                cbey(xanum(x+1),yanum(j)) = cb(2);
+            end
+        end
+    end
+end
+end
+
+% Add bottom flare
+yanum = ajcenter - dist2;
+yanum = round(yanum(1:length(xanum))); % y cell locations
+for i = xa1num:xa2num
+    x = i - xa1num + 1; % x goes from 1 to length of flare
+for j = 1:length(yanum)
+    if x == j % check for Ex component
+        caex(xanum(x),yanum(j)) = ca(2);
+        cbex(xanum(x),yanum(j)) = cb(2);
+        if j ~= 1 % check for end of antenna
+            if yanum(j) < yanum(j-1) % check for Ey component
+                caey(xanum(x),yanum(j)) = ca(2);
+                cbey(xanum(x),yanum(j)) = cb(2);
+            end
+        end
+    end
+end
+end
+
+if twoantenna == false
+    iread2 = xa2num(length(xa2num));
+    jread2 = je/2;
+    iread = ie - aicenter; % sink locatoin
+    jread = je/2;
+end
+
+if twoantenna == true
+ai2center = ie - aicenter;
+
+% Conversion of parameters from meters to cells
+xa1num = ai2center - round((plength + re)/dx);
+xa2num = ai2center - round(plength/dx);
+ya1num = ajcenter + round(B/2/dx);
+ya2num = ajcenter + ceil(b/2/dx);
+xanum = round(xa1num:xa2num);
+yanum = ya1num:-m:ya2num;
+yanum = round(yanum); % y cell locations
+yanum = yanum((length(yanum)-length(xanum)+1):length(yanum));
+dist2 = yanum - ajcenter-1; % distance from center
+iread = ai2center - round(lambda/(4*dx)); % sink locatoin
+jread = (ajcenter - floor(b/(2*dx))+1):(ajcenter + floor(b/(2*dx)));
+%x read
+%y read
+
+% Add top flare
+for i = xa1num:xa2num
+    x = i - xa1num + 1; % x goes from 1 to length of flare
+for j = 1:length(yanum(1:length(xanum))) %***
+    if x == j % check for Ex component
+        caex(xanum(x),yanum(j)) = ca(2);
+        cbex(xanum(x),yanum(j)) = cb(2);
+        if j ~= 1 % check for end of antenna
+            if yanum(j) < yanum(j-1) % check for Ey component
+                caey(xanum(x),yanum(j)) = ca(2);
+                cbey(xanum(x),yanum(j)) = cb(2);
+            end
+        end
+    end
+end
+end
+
+% Add bottom flare
+yanum = ajcenter - dist2;
+yanum = round(yanum(1:length(xanum))); % y cell locations
+for i = xa1num:xa2num
+    x = i - xa1num + 1; % x goes from 1 to length of flare
+for j = 1:length(yanum)
+    if x == j % check for Ex component
+        caex(xanum(x),yanum(j)) = ca(2);
+        cbex(xanum(x),yanum(j)) = cb(2);
+        if j ~= length(yanum) % check for end of antenna
+            if yanum(j+1) > yanum(j) % check for Ey component
+                caey(xanum(x+1),yanum(j)) = ca(2);
+                cbey(xanum(x+1),yanum(j)) = cb(2);
+            end
+        end
+    end
+end
+end
+
+% Add parallel plate
+for i = ai2center - plengthnum:ai2center
+    j = ajcenter+ceil(b/(2*dx));
+    caex(i,j) = ca(2);
+    cbex(i,j) = cb(2);
+    j = ajcenter-floor(b/(2*dx));
+    caex(i,j) = ca(2);
+    cbex(i,j) = cb(2);
+end
+if backwall == 0
+    for i = ai2center:ie
+        j = ajcenter+ceil(b/(2*dx));
+        caex(i,j) = ca(2);
+        cbex(i,j) = cb(2);
+        j = ajcenter-floor(b/(2*dx));
+        caex(i,j) = ca(2);
+        cbex(i,j) = cb(2);
+    end
+end
+
+if backwall == 1
+% Add right edge
+i = ai2center;
+for j = ajcenter-floor(b/(2*dx)):...
+        ajcenter+ceil(b/(2*dx))-1
+    caey(i,j) = ca(2);
+    cbey(i,j) = cb(2);
+end
+end
+end %twoantenna == 1
+
+% %     Add metal cylinder 
+%  
+% diam=20;          % diameter of cylinder: 6 cm 
+% rad=diam/2.0;     % radius of cylinder: 3 cm 
+% icenter=4*ie/5;   % i-coordinate of cylinder's center 
+% jcenter=je/2;     % j-coordinate of cylinder's center 
+%  
+% for i=1:ie 
+% for j=1:je 
+%   dist2=(i+0.5-icenter)^2 + (j-jcenter)^2; 
+%   if dist2 <= rad^2  
+%      caex(i,j)=ca(2); 
+%      cbex(i,j)=cb(2); 
+%   end 
+%   dist2=(i-icenter)^2 + (j+0.5-jcenter)^2; 
+%   if dist2 <= rad^2  
+%      caey(i,j)=ca(2); 
+%      cbey(i,j)=cb(2); 
+%   end 
+% end 
+% end 

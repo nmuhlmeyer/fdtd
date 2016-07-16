@@ -1,0 +1,18 @@
+function materialgrid(caex,caey,is,js,ca,ie,je)
+% materialgrid(caex,caey,is,js)
+
+    g = zeros(ie,je);
+    for i = 1:ie
+    for j = 1:je
+        if caex(i,j)==ca(2)&& caey(i,j)==ca(2)
+            g(i,j)=3;
+        elseif caex(i,j) == ca(2)
+            g(i,j)=1;
+        elseif caey(i,j) == ca(2)
+            g(i,j)=2;
+        end
+    end
+    end
+    g(is,js) = -1;
+    figure(1)
+    bar3(g)
