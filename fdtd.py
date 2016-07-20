@@ -4,7 +4,7 @@
 #
 #     Program author: Nicholas Muhlmeyer
 #
-#     Date of this version:  May 2012
+#     Date of this version:  July 2016
 #
 #     An E-plane sectoral horn has been modeled in free space by
 #     using copper material. The aperture faces the right PML boundary.
@@ -42,24 +42,26 @@
 #*********************************************************************** 
 
 import math
+import numpy
+import scipy
+import matplotlib
 #*********************************************************************** 
 #     Fundamental constants 
-#%*********************************************************************** 
+#*********************************************************************** 
 def def_constants():
-    global cc, muz,epsz,etaz,freq,freq,lamb,omega,T
+    global cc, muz,epsz,etaz,freq,freq,lambda1,omega,T
     cc=2.99792458e8             #speed of light in free space 
     muz=4.0*math.pi*1.0e-7      #permeability of free space 
     epsz=1.0/(cc*cc*muz)        #permittivity of free space 
     etaz = math.sqrt(muz/epsz)  #instrinsic impedance of free space
  
     freq = 10.0e9               #center frequency of source excitation 
-    lamb=cc/freq                #center wavelength of source excitation 
+    lambda1=cc/freq                #center wavelength of source excitation 
     omega=2.0*math.pi*freq
     T = 1/freq
     # freq = 12.0e9; %different excitation freq
     # omega = 2.0*pi*freq; %different excitation freq
     return
-
 
 #*********************************************************************** 
 #     Analysis Methods 
@@ -67,7 +69,7 @@ def def_constants():
 def def_analysis():
     global batchfile, realtime, gridplot, softsource
     global efieldsource, ss, nff,twoantenna, backwall
-    batchfile = 1
+    batchfile = 0
     realtime = 0            #updating time plots
     gridplot = 0            #plot materials in grid
     softsource = 1          #use soft source
@@ -82,198 +84,174 @@ def def_analysis():
         twoantenna = 0
         backwall = 0
     return
-def_constants()
-def_analysis()
 
-'''
-%*********************************************************************** 
-%     Grid parameters 
-%*********************************************************************** 
-
-if batchfile == false
-    scale = 1;
-% ie=100;           %number of grid cells in x-direction 
-% je=50;            %number of grid cells in y-direction 
-ie = 400;%ie = 260;
-end
-je = 400;
-%ie=ie*2;je=je*2;
- 
-ib=ie+1; 
-jb=je+1; 
- 
-% is=15;            %location of z-directed hard source 
-% js=je/2;          %location of z-directed hard source 
- 
-% dx=3.0e-3;        %space increment of square lattice 
-dx = lambda/20/scale;
-dt=dx/(2.0*cc);   %time step 
- 
-if batchfile == false
-% nmax=300;         %total number of time steps 
-nmax = 200;
-end
- 
-iebc=8;           %thickness of left and right PML region 
-jebc=8;           %thickness of front and back PML region 
-% rmax=0.00001; 
-rmax = 1.0e-7;
-orderbc=2; 
-ibbc=iebc+1; 
-jbbc=jebc+1; 
-iefbc=ie+2*iebc; 
-%jefbc=je+2*jebc; 
-ibfbc=iefbc+1; 
-%jbfbc=jefbc+1; 
-
-if ss == true
-    n1 = 4986;
-    n2 = n1+T/4/dt;   %steady state timestep T/4 later
-end
-
-if nff == true
-    fftbuffer = 12; %buffer around boundary to run FFT
-end
-
-'''
-
+#*********************************************************************** 
+#     Grid parameters 
+#*********************************************************************** 
+def grid_parameters():
+    global ie, je, ib, jb, dx, dt, nmax, iebc, jebc,rmax, orderbc
+    global ibbc, jbbc, iefbc, ibfbc, n1, n2, fttbuffer
+    if not batchfile:
+        scale = 1
+    ie = 400                #number of grid cells in x-direction 
+    je = 400                #number of grid cells in y-direction 
+    ib = ie + 1             #location of z-directed hard source 
+    jb = je +1              #location of z-directed hard source
+    dx = lambda1/20/scale   #space increment of square lattice 
+    dt = dx/(2.0*cc)        #time step 
+    if not batchfile:
+        nmax = 200          #total number of time steps
+    iebc = 8                #thickness of left and right PML region
+    jebc = 8                #thickness of front and back PML region
+    rmax = 1.0e-7
+    orderbc = 2
+    ibbc = iebc + 1
+    jbbc = jebc + 1
+    iefbc = ie + 2 * jebc
+    ibfbc = iefbc + 1
+    if ss:
+        n1 = 4986
+        n2 = n1 + T/(4*dt)  #steady state timestep T/4 later
+    if nff:
+        fttbuffer = 12      #buffer around boundary to run FFT
+    return
 
 #*********************************************************************** 
 #     Material parameters 
 #*********************************************************************** 
-
-
 def def_material_parameters():
-    global eps,sig,mur,sim
+    global media, eps,sig,mur,sim
     media=2                     # media [free space, PEC]
     eps=[1.0,1.0]
     sig=[0.0,1e100]
     mur=[1.0,1.0]
     sim=[0.0,0.0]
-    return media
+    return
+
+def_constants()
+def_analysis()
+grid_parameters()
 def_material_parameters()
-''' 
-%*********************************************************************** 
-%     Wave excitation 
-%*********************************************************************** 
 
-source = fdtdsource(ss,freq,omega,dt,nmax,etaz);
+#*********************************************************************** 
+#     Wave excitation 
+#*********************************************************************** 
 
-%*********************************************************************** 
-%     Field arrays 
-%*********************************************************************** 
+#source = fdtdsource(ss,freq,omega,dt,nmax,etaz)
+
+#*********************************************************************** 
+#     Field arrays 
+#*********************************************************************** 
+def field_arrays():
+    global ex, ey, hz
+    global exbcb, eybcb, hzxbcb, hzybcb
+    global exbcf, eybcf,hzxbcf,hzybcf
+    global exbcl, eybcl, hzxbcl, hzybcl
+    global exbcr, eybcr, hzxgcr, hzybcr
+    ex = numpy.zeros([ie,jb])               #fields in main grid
+    ey = numpy.zeros([ie,jb])
+    hz = numpy.zeros([ie,je])
+    
+    exbcf = numpy.zeros([iefbc,jebc])       #fields in front PML region
+    eybcf = numpy.zeros([ibfbc,jebc])
+    hzxbcf = numpy.zeros([iefbc,jebc])
+    hzybcf = numpy.zeros([iefbc,jebc])
+    
+    exbcb = numpy.zeros([iefbc,jbbc])       #fields in back PML region
+    eybcb = numpy.zeros([ibfbc,jebc])
+    hzxbcb = numpy.zeros([iefbc,jebc])
+    hzybcb = numpy.zeros([iefbc,jebc])
+    
+    exbcl = numpy.zeros([iebc,jb])          #fields in left PML region 
+    eybcl = numpy.zeros([iebc,je])
+    hzxbcl = numpy.zeros([iebc,je])
+    hzybcl = numpy.zeros([iebc,je])
+    
+    exbcr = numpy.zeros([iebc,jb])          #fields in right PML region
+    eybcr = numpy.zeros([ibbc,je])
+    hzxgcr = numpy.zeros([iebc,je])
+    hzybcr = numpy.zeros([iebc,je])
+    return
  
-ex=zeros(ie,jb);           %fields in main grid  
-ey=zeros(ib,je); 
-hz=zeros(ie,je); 
- 
-exbcf=zeros(iefbc,jebc);   %fields in front PML region 
-eybcf=zeros(ibfbc,jebc); 
-hzxbcf=zeros(iefbc,jebc); 
-hzybcf=zeros(iefbc,jebc); 
- 
-exbcb=zeros(iefbc,jbbc);   %fields in back PML region 
-eybcb=zeros(ibfbc,jebc); 
-hzxbcb=zeros(iefbc,jebc); 
-hzybcb=zeros(iefbc,jebc); 
- 
-exbcl=zeros(iebc,jb);      %fields in left PML region 
-eybcl=zeros(iebc,je); 
-hzxbcl=zeros(iebc,je); 
-hzybcl=zeros(iebc,je); 
- 
-exbcr=zeros(iebc,jb);      %fields in right PML region 
-eybcr=zeros(ibbc,je); 
-hzxbcr=zeros(iebc,je); 
-hzybcr=zeros(iebc,je); 
- 
-%*********************************************************************** 
-%     Array Initialization 
-%*********************************************************************** 
+#*********************************************************************** 
+#     Array Initialization 
+#*********************************************************************** 
+def array_initialization():
+    global ca, cb, da, db
+    global caexbcf, cbexbcf, dahzbcf, dbhybcf
+    global caexbcb, cbexbcb, dahzybcb, dbhzybcb
+    global caeybcl, cbeybcl, dahzxbcl, dbhzxbcl
+    global dahzxbcf, dbhzxbcf, dahzxbcb, dbhzxbcb
+    global caexbcl, cbexbcl, dahzybcl, dbhzybcl
+    global caeybcr, cbeybcr,caeybcf , cbeybcf
+    global caeybcb, cbeybcb, dahzxbcr, dbhzxbcr
+    global dahzybcr, dbhzybcr
+    global N, eyr, hzr, sink1, sink2, sink3
+    ca = [0.0 for x in range(media)]
+    cb = [0.0 for x in range(media)]
+    da = [0.0 for x in range(media)]
+    db = [0.0 for x in range(media)]
+    caexbcf = numpy.zeros([iefbc,jebc-1])
+    cbexbcf = numpy.zeros([iefbc,jebc-1])
+    dahzbcf = numpy.zeros([iefbc,jebc])
+    dbhybcf = numpy.zeros([iefbc,jebc])
+    caexbcb = numpy.zeros([iefbc,jebc-1])
+    cbexbcb = numpy.zeros([iefbc,jebc-1])
+    dahzybcb = numpy.zeros([iefbc,jebc])
+    dbhzybcb = numpy.zeros([iefbc,jebc])
+    caeybcl = numpy.zeros([iebc,je])
+    cbeybcl = numpy.zeros([iebc,je])
+    dahzxbcl = numpy.zeros([iebc,je])
+    dbhzxbcl = numpy.zeros([iebc,je])
+    dahzxbcf = numpy.zeros([iebc,jebc])
+    dbhzxbcf = numpy.zeros([iebc,jebc])
+    dahzxbcb = numpy.zeros([iebc,jebc])
+    dbhzxbcb = numpy.zeros([iebc,jebc])
+    caexbcl = numpy.zeros([iebc,je-1])
+    cbexbcl = numpy.zeros([iebc,je-1])
+    dahzybcl = numpy.zeros([iebc,je])
+    dbhzybcl = numpy.zeros([iebc,je])
+    caeybcr = numpy.zeros([iebc-1,je])
+    cbeybcr = numpy.zeros([iebc-1,je])
+    caeybcf = numpy.zeros([2*iebc-1+ie,jebc])
+    cbeybcf = numpy.zeros([2*iebc-1+ie,jebc])
+    caeybcb = numpy.zeros([2*iebc-1+ie,jebc])
+    cbeybcb = numpy.zeros([2*iebc-1+ie,jebc])
+    dahzxbcr = numpy.zeros([iebc,je])
+    dbhzxbcr = numpy.zeros([iebc,je])
+    dahzybcr = numpy.zeros([iebc,je])
+    dbhzybcr = numpy.zeros([iebc,je])
+    
+    if nff:
+        N = numpy.power(2,16)
+        if ss:
+            eyr = [0.0 for x in range(je/2 - fftbuffer + 1)]
+            hzr = [0.0 for x in range(je/2 - fftbuffer + 1)]
+    if batchfile:
+        sink1 = numpy.zeros(nmax)
+        sink2 = numpy.zeros(nmax)
+    sink3 = numpy.zeros(nmax)
+    
+    return
 
-ca(1:media) = 0;
-cb(1:media) = 0;
-da(1:media) = 0;
-db(1:media) = 0;
-caexbcf = zeros(iefbc,jebc-1);
-cbexbcf = zeros(iefbc,jebc-1);
-dahzybcf = zeros(iefbc,jebc);
-dbhzybcf = zeros(iefbc,jebc);
-caexbcb = zeros(iefbc,jebc-1);
-cbexbcb = zeros(iefbc,jebc-1);
-dahzybcb = zeros(iefbc,jebc);
-dbhzybcb = zeros(iefbc,jebc);
-caeybcl = zeros(iebc,je);
-cbeybcl = zeros(iebc,je);
-dahzxbcl = zeros(iebc,je);
-dbhzxbcl = zeros(iebc,je);
-dahzxbcf = zeros(iebc,jebc);
-dbhzxbcf = zeros(iebc,jebc);
-dahzxbcb = zeros(iebc,jebc);
-dbhzxbcb = zeros(iebc,jebc);
-caexbcl = zeros(iebc,je-1);
-cbexbcl = zeros(iebc,je-1);
-dahzybcl = zeros(iebc,je);
-dbhzybcl = zeros(iebc,je);
-caeybcr = zeros(iebc-1,je);
-cbeybcr = zeros(iebc-1,je);
-caeybcf = zeros(2*iebc-1+ie,jebc);
-cbeybcf = zeros(2*iebc-1+ie,jebc);
-caeybcb = zeros(2*iebc-1+ie,jebc);
-cbeybcb = zeros(2*iebc-1+ie,jebc);
-dahzxbcr = zeros(iebc,je);
-dbhzxbcr = zeros(iebc,je);
-dahzybcr = zeros(iebc,je); 
-dbhzybcr = zeros(iebc,je);
-
-if nff == true
-    N = 2^16;
-if ss == true
-
-    eyr(1:je/2-fftbuffer+1) = 0;
-
-    hzr(1:je/2-fftbuffer+1) = 0;
-
-end
-end
-
-if batchfile == true
-    sink = zeros(1,nmax);
-    sink4 = zeros(1,nmax);
-end
-%f1126(1:nmax) = 0;
-
-sink5 = zeros(1,nmax);
-sink6 = zeros(1,nmax);
-sink7 = zeros(1,nmax);
-sink8 = zeros(1,nmax);
-sink9 = zeros(1,nmax);
-sink10 = zeros(1,nmax);
-sink11 = zeros(1,nmax);
-sink12 = zeros(1,nmax);
-sink13 = zeros(1,nmax);
-sink14 = zeros(1,nmax);
-sink15 = zeros(1,nmax);
-sink16 = zeros(1,nmax);
-sink17 = zeros(1,nmax);
-sink18 = zeros(1,nmax);
-sink19 = zeros(1,nmax);
-sink20 = zeros(1,nmax);
-sink21 = zeros(1,nmax);
-
-%*********************************************************************** 
-%     Updating coefficients 
-%*********************************************************************** 
- 
-for i=1:media 
-  eaf  =dt*sig(i)/(2.0*epsz*eps(i)); 
-  ca(i)=(1.0-eaf)/(1.0+eaf); 
-  cb(i)=dt/epsz/eps(i)/dx/(1.0+eaf); 
-  haf  =dt*sim(i)/(2.0*muz*mur(i)); 
-  da(i)=(1.0-haf)/(1.0+haf); 
-  db(i)=dt/muz/mur(i)/dx/(1.0+haf); 
-end 
- 
+#*********************************************************************** 
+#     Updating coefficients 
+#*********************************************************************** 
+def updating_coefficients():
+    global eaf, haf
+    for i in range(media):
+        eaf = dt*sig[i] / (2.0 * epsz * eps[1])
+        ca[i] = (1.0 - eaf) / (1.0 + eaf)
+        cb[i]= dt / (epsz * eps[i] * dx * (1.0 + eaf)) 
+        haf = dt * sim[i] / (2.0 * muz * mur[i])
+        da[i] = (1.0 - haf) / (1.0 + haf)
+        db[i]= dt / (muz * mur[i] * dx * (1.0 + haf))
+    return
+print dt
+field_arrays()
+array_initialization()
+updating_coefficients()
+'''
 %*********************************************************************** 
 %     Geometry specification (main grid) 
 %*********************************************************************** 
